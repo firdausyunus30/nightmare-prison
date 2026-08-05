@@ -9,6 +9,7 @@ import LobbyScreen from './components/LobbyScreen';
 import RoleReveal from './components/RoleReveal';
 import GameScreen from './components/GameScreen';
 import ResultScreen from './components/ResultScreen';
+import FinaleScreen from './components/FinaleScreen';
 
 // Get or create unique player ID
 let playerId = sessionStorage.getItem('nightmare_prison_player_id');
@@ -22,6 +23,7 @@ export default function App() {
   const [roomCode, setRoomCode] = useState(() => sessionStorage.getItem('nightmare_prison_room_code') || '');
   const [nickname, setNickname] = useState(() => sessionStorage.getItem('nightmare_prison_nickname') || '');
   const [room, setRoom] = useState(null);
+  const [showFinalVerdict, setShowFinalVerdict] = useState(false);
   const lastPhaseRef = useRef(null);
   const lastStatusRef = useRef(null);
   const transitionInFlightRef = useRef(false);
@@ -62,6 +64,8 @@ export default function App() {
     const newPhase = room.phase;
     const newStatus = room.status;
 
+    if (newStatus !== 'ending') setShowFinalVerdict(false);
+
     if (newStatus === 'lobby' && lastStatusRef.current !== 'lobby') {
       startLobbyAmbience();
     } else if (newStatus === 'role_reveal' && lastStatusRef.current !== 'role_reveal') {
@@ -75,7 +79,7 @@ export default function App() {
       } else if (newPhase === 'voting' && lastPhaseRef.current !== 'voting') {
         playVoteSting();
       }
-    } else if (newStatus === 'game_over' && lastStatusRef.current !== 'game_over') {
+    } else if (newStatus === 'ending' && lastStatusRef.current !== 'ending') {
       stopAllAmbience();
       setTimeout(() => playDeathSound(), 400);
     }
@@ -289,7 +293,7 @@ export default function App() {
         const nextWinner = checkWinner(resolution.updatedPlayers);
 
         if (nextWinner) {
-          updates[`rooms/${roomCode}/status`] = 'game_over';
+          updates[`rooms/${roomCode}/status`] = 'ending';
           updates[`rooms/${roomCode}/winner`] = nextWinner;
           updates[`rooms/${roomCode}/players`] = resolution.updatedPlayers;
           updates[`rooms/${roomCode}/story`] = resolution.story;
@@ -316,7 +320,7 @@ export default function App() {
         const nextWinner = checkWinner(resolution.updatedPlayers);
 
         if (nextWinner) {
-          updates[`rooms/${roomCode}/status`] = 'game_over';
+          updates[`rooms/${roomCode}/status`] = 'ending';
           updates[`rooms/${roomCode}/winner`] = nextWinner;
           updates[`rooms/${roomCode}/players`] = resolution.updatedPlayers;
           updates[`rooms/${roomCode}/story`] = resolution.announcedText;
@@ -338,7 +342,7 @@ export default function App() {
 
   // Host client checking timer expirations
   useEffect(() => {
-    if (!room || room.hostId !== playerId || room.status === 'lobby' || room.status === 'game_over') return;
+    if (!room || room.hostId !== playerId || !['role_reveal', 'playing'].includes(room.status)) return;
 
     const interval = setInterval(() => {
       const now = Date.now();
@@ -528,6 +532,17 @@ export default function App() {
             onPlayAgain={handlePlayAgain}
             onLeaveRoom={handleExitRoom}
           />
+        );
+      case 'ending':
+        return showFinalVerdict ? (
+          <ResultScreen
+            room={room}
+            currentPlayerId={playerId}
+            onPlayAgain={handlePlayAgain}
+            onLeaveRoom={handleExitRoom}
+          />
+        ) : (
+          <FinaleScreen story={room.story} onReveal={() => setShowFinalVerdict(true)} />
         );
       default:
         return (
